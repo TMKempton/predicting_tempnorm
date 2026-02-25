@@ -21,8 +21,9 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Build PCA/KMeans reference space from hidden states")
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--model", type=str, default="facebook/opt-125m")
-    p.add_argument("--dataset-name", type=str, default="wikitext")
-    p.add_argument("--dataset-config", type=str, default="wikitext-103-raw-v1")
+    p.add_argument("--dataset-name", type=str, default="vblagoje/cc_news")
+    p.add_argument("--dataset-config", type=str, default="")
+    p.add_argument("--dataset-split", type=str, default="train")
     p.add_argument("--sample-count", type=int, default=2000)
     p.add_argument("--token-index", type=int, default=50, help="0-based index; 50 means 51st token")
     p.add_argument("--pca-components", type=int, default=30)
@@ -43,6 +44,7 @@ def main() -> None:
         tokenizer=tokenizer,
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
+        dataset_split=args.dataset_split,
         n_samples=args.sample_count,
         prefix_len=prefix_len,
         seed=args.seed,
@@ -74,6 +76,7 @@ def main() -> None:
         "model": args.model,
         "dataset_name": args.dataset_name,
         "dataset_config": args.dataset_config,
+        "dataset_split": args.dataset_split,
         "sample_count": args.sample_count,
         "token_index": args.token_index,
         "pca_components": args.pca_components,

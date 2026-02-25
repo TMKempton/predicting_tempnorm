@@ -2,7 +2,7 @@ import json
 import math
 import pickle
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -27,10 +27,24 @@ def load_model_and_tokenizer(model_name: str, device: torch.device):
     return model, tokenizer
 
 
-def text_stream(dataset_name: str, dataset_config: str, split: str = "train") -> Iterable[str]:
-    ds = load_dataset(dataset_name, dataset_config, split=split)
+def _load_text_dataset(dataset_name: str, dataset_config: Optional[str], split: str):
+    if dataset_config:
+        return load_dataset(dataset_name, dataset_config, split=split)
+    return load_dataset(dataset_name, split=split)
+
+
+def _extract_text(row: Dict) -> str:
+    for key in ("text", "article", "content", "body", "description", "title"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
+def text_stream(dataset_name: str, dataset_config: Optional[str], split: str = "train") -> Iterable[str]:
+    ds = _load_text_dataset(dataset_name, dataset_config, split=split)
     for row in ds:
-        txt = row.get("text", "")
+        txt = _extract_text(row)
         if isinstance(txt, str) and txt.strip():
             yield txt
 
@@ -38,15 +52,20 @@ def text_stream(dataset_name: str, dataset_config: str, split: str = "train") ->
 def sample_tokenized_prefixes(
     tokenizer,
     dataset_name: str,
-    dataset_config: str,
+    dataset_config: Optional[str],
+    dataset_split: str,
     n_samples: int,
     prefix_len: int,
     seed: int,
 ) -> List[List[int]]:
     set_seed(seed)
-    prefixes: List[List[int]] = []
+    ds = _load_text_dataset(dataset_name, dataset_config, split=dataset_split).shuffle(seed=seed)
 
-    for text in text_stream(dataset_name, dataset_config, split="train"):
+    prefixes: List[List[int]] = []
+    for row in ds:
+        text = _extract_text(row)
+        if not text:
+            continue
         token_ids = tokenizer(text, add_special_tokens=False).input_ids
         if len(token_ids) < prefix_len:
             continue

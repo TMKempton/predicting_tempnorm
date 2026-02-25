@@ -24,8 +24,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--artifacts-dir", type=Path, required=True)
     p.add_argument("--output-file", type=Path, required=True)
     p.add_argument("--model", type=str, default="facebook/opt-125m")
-    p.add_argument("--dataset-name", type=str, default="wikitext")
-    p.add_argument("--dataset-config", type=str, default="wikitext-103-raw-v1")
+    p.add_argument("--dataset-name", type=str, default="vblagoje/cc_news")
+    p.add_argument("--dataset-config", type=str, default="")
+    p.add_argument("--dataset-split", type=str, default="train")
     p.add_argument("--sample-count", type=int, default=5000)
     p.add_argument("--prefix-len", type=int, default=30)
     p.add_argument("--wander-len", type=int, default=20)
@@ -51,6 +52,7 @@ def main() -> None:
         tokenizer=tokenizer,
         dataset_name=args.dataset_name,
         dataset_config=args.dataset_config,
+        dataset_split=args.dataset_split,
         n_samples=args.sample_count,
         prefix_len=args.prefix_len,
         seed=args.seed,
@@ -83,6 +85,7 @@ def main() -> None:
                 "model": args.model,
                 "dataset_name": args.dataset_name,
                 "dataset_config": args.dataset_config,
+                "dataset_split": args.dataset_split,
                 "prefix_len": args.prefix_len,
                 "wander_len": args.wander_len,
                 "gen_number": args.gen_number,

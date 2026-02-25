@@ -1,6 +1,7 @@
 # Sanity Check (Independent Codebase)
 
 This folder is a fully separate experiment codebase for a cluster-based sanity check.
+Default dataset is `vblagoje/cc_news`, sampled in randomized order via dataset shuffle.
 
 ## Overview
 
@@ -33,14 +34,14 @@ pip install -r sanity_check/requirements.txt
 ```bash
 python -m sanity_check.build_reference_space \
   --output-dir sanity_check/artifacts \
-  --dataset-name wikitext \
-  --dataset-config wikitext-103-raw-v1
+  --dataset-name vblagoje/cc_news \
+  --dataset-split train
 
 python -m sanity_check.generate_clustered_tempnorm_data \
   --artifacts-dir sanity_check/artifacts \
   --output-file sanity_check/data/clustered_tempnorm.jsonl \
-  --dataset-name wikitext \
-  --dataset-config wikitext-103-raw-v1
+  --dataset-name vblagoje/cc_news \
+  --dataset-split train
 
 python -m sanity_check.analyze_clustered_tempnorm \
   --data-file sanity_check/data/clustered_tempnorm.jsonl \
