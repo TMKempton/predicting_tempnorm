@@ -11,98 +11,25 @@ from sklearn.model_selection import GroupShuffleSplit
 from .utils import read_jsonl
 
 
-def flatten_tempnorm50(rows: List[Dict]) -> np.ndarray:
-    vals = []
-    for r in rows:
-        for tn in r["continuation_tempnorms"]:
-            vals.append(float(tn["50"]))
-    return np.asarray(vals, dtype=np.float64)
-
-
-def per_starting_point_stats(rows: List[Dict]) -> Dict[str, np.ndarray]:
-    means = []
-    vars_ = []
-    clusters = []
-    for r in rows:
-        vals = np.asarray([float(tn["50"]) for tn in r["continuation_tempnorms"]], dtype=np.float64)
-        means.append(float(np.mean(vals)))
-        vars_.append(float(np.var(vals)))
-        clusters.append(int(r["cluster"]))
-    return {
-        "mean50": np.asarray(means, dtype=np.float64),
-        "var50_within_starting_point": np.asarray(vars_, dtype=np.float64),
-        "cluster": np.asarray(clusters, dtype=np.int64),
-    }
-
-
-def cluster_variance_decomposition(point_means: np.ndarray, clusters: np.ndarray) -> Dict[str, float]:
-    global_var = float(np.var(point_means))
-    uniq = np.unique(clusters)
-
-    weighted_within = 0.0
-    cluster_stats = {}
-    n_total = len(point_means)
-
-    for c in uniq:
-        mask = clusters == c
-        vals = point_means[mask]
-        c_var = float(np.var(vals)) if len(vals) > 1 else 0.0
-        c_mean = float(np.mean(vals)) if len(vals) > 0 else 0.0
-        cluster_stats[str(int(c))] = {
-            "count": int(np.sum(mask)),
-            "mean": c_mean,
-            "variance": c_var,
-        }
-        weighted_within += (len(vals) / n_total) * c_var
-
-    reduction = 0.0
-    if global_var > 0:
-        reduction = 1.0 - (weighted_within / global_var)
-
-    return {
-        "global_variance_point_means": global_var,
-        "weighted_within_cluster_variance": float(weighted_within),
-        "variance_reduction_fraction": float(reduction),
-        "cluster_stats": cluster_stats,
-    }
-
-
-def compare_cluster_vs_within_point(rows: List[Dict], point_means: np.ndarray, point_vars: np.ndarray, clusters: np.ndarray) -> Dict[str, float]:
-    uniq = np.unique(clusters)
-    cluster_vars = []
-    for c in uniq:
-        vals = point_means[clusters == c]
-        cluster_vars.append(float(np.var(vals)) if len(vals) > 1 else 0.0)
-
-    avg_cluster_var = float(np.mean(cluster_vars)) if cluster_vars else 0.0
-    avg_within_point_var = float(np.mean(point_vars)) if len(point_vars) else 0.0
-
-    ratio = None
-    if avg_within_point_var > 0:
-        ratio = float(avg_cluster_var / avg_within_point_var)
-
-    return {
-        "avg_cluster_variance_of_point_means": avg_cluster_var,
-        "avg_within_starting_point_variance_over_8_continuations": avg_within_point_var,
-        "cluster_to_within_point_variance_ratio": ratio,
-    }
-
-
-def predictive_analysis(rows: List[Dict], test_size: float, seed: int) -> Dict[str, float]:
+def predictive_analysis(
+    rows: List[Dict],
+    feature_lengths: List[int],
+    target_length: int,
+    test_size: float,
+    seed: int,
+) -> Dict[str, object]:
     x = []
     y = []
     groups = []
 
+    feature_keys = [str(k) for k in feature_lengths]
+    target_key = str(target_length)
+
     for r in rows:
         gid = int(r["starting_point_id"])
         for tn in r["continuation_tempnorms"]:
-            x.append([
-                np.log(max(float(tn["1"]), 1e-300)),
-                np.log(max(float(tn["2"]), 1e-300)),
-                np.log(max(float(tn["5"]), 1e-300)),
-                np.log(max(float(tn["10"]), 1e-300)),
-            ])
-            y.append(np.log(max(float(tn["50"]), 1e-300)))
+            x.append([np.log(max(float(tn[k]), 1e-300)) for k in feature_keys])
+            y.append(np.log(max(float(tn[target_key]), 1e-300)))
             groups.append(gid)
 
     x = np.asarray(x, dtype=np.float64)
@@ -119,27 +46,30 @@ def predictive_analysis(rows: List[Dict], test_size: float, seed: int) -> Dict[s
     yhat_test = reg.predict(x[test_idx])
 
     corr = {}
-    for j, k in enumerate(["1", "2", "5", "10"]):
+    for j, k in enumerate(feature_keys):
         corr[k] = float(np.corrcoef(x[:, j], y)[0, 1])
 
+    coef_dict = {}
+    for j, k in enumerate(feature_keys):
+        coef_dict[f"log_t{k}"] = float(reg.coef_[j])
+
     return {
+        "target_length": target_length,
+        "feature_lengths": feature_lengths,
         "train_r2_log": float(r2_score(y[train_idx], yhat_train)),
         "test_r2_log": float(r2_score(y[test_idx], yhat_test)),
         "feature_target_correlations_log": corr,
-        "coefficients": {
-            "log_t1": float(reg.coef_[0]),
-            "log_t2": float(reg.coef_[1]),
-            "log_t5": float(reg.coef_[2]),
-            "log_t10": float(reg.coef_[3]),
-        },
+        "coefficients": coef_dict,
         "intercept": float(reg.intercept_),
     }
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Analyze clustered tempnorm data")
+    p = argparse.ArgumentParser(description="Analyze early tempnorm predictiveness")
     p.add_argument("--data-file", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
+    p.add_argument("--feature-lengths", type=int, nargs="+", default=[1, 2, 5, 10])
+    p.add_argument("--target-length", type=int, default=20)
     p.add_argument("--test-size", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)
     return p.parse_args()
@@ -147,24 +77,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if max(args.feature_lengths) >= args.target_length:
+        raise ValueError("feature lengths must be strictly smaller than target length")
+
     rows = read_jsonl(args.data_file)
-
-    all_tempnorm50 = flatten_tempnorm50(rows)
-    point = per_starting_point_stats(rows)
-
-    q1 = {
-        "global_tempnorm50_mean_over_all_continuations": float(np.mean(all_tempnorm50)),
-        "global_tempnorm50_variance_over_all_continuations": float(np.var(all_tempnorm50)),
-    }
-    q1.update(cluster_variance_decomposition(point["mean50"], point["cluster"]))
-
-    q2 = compare_cluster_vs_within_point(rows, point["mean50"], point["var50_within_starting_point"], point["cluster"])
-    q3 = predictive_analysis(rows, test_size=args.test_size, seed=args.seed)
+    q = predictive_analysis(
+        rows=rows,
+        feature_lengths=args.feature_lengths,
+        target_length=args.target_length,
+        test_size=args.test_size,
+        seed=args.seed,
+    )
 
     report = {
-        "question_1_cluster_partitioning": q1,
-        "question_2_cluster_vs_within_starting_point": q2,
-        "question_3_predict_tempnorm50_from_early_tempnorms": q3,
+        "predictive_analysis": q,
     }
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -172,9 +98,8 @@ def main() -> None:
 
     summary_lines = [
         "Sanity-check analysis summary",
-        f"Q1 variance reduction fraction: {q1['variance_reduction_fraction']:.6f}",
-        f"Q2 cluster/within-point variance ratio: {q2['cluster_to_within_point_variance_ratio']}",
-        f"Q3 test R^2 (log-space): {q3['test_r2_log']:.6f}",
+        f"Predict tempnorm@{args.target_length} from {args.feature_lengths}",
+        f"Test R^2 (log-space): {q['test_r2_log']:.6f}",
     ]
     (args.output_dir / "analysis_summary.txt").write_text("\n".join(summary_lines), encoding="utf-8")
 

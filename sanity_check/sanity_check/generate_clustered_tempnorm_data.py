@@ -31,9 +31,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--prefix-len", type=int, default=30)
     p.add_argument("--wander-len", type=int, default=20)
     p.add_argument("--gen-number", type=int, default=8)
-    p.add_argument("--gen-length", type=int, default=50)
+    p.add_argument("--gen-length", type=int, default=20)
     p.add_argument("--alpha", type=float, default=4.0)
-    p.add_argument("--eval-lengths", type=int, nargs="+", default=[1, 2, 5, 10, 20, 50])
+    p.add_argument("--eval-lengths", type=int, nargs="+", default=[1, 2, 5, 10, 20])
     p.add_argument("--seed", type=int, default=123)
     return p.parse_args()
 
@@ -41,6 +41,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     set_seed(args.seed)
+    if max(args.eval_lengths) > args.gen_length:
+        raise ValueError(
+            f"max(eval_lengths)={max(args.eval_lengths)} exceeds gen_length={args.gen_length}"
+        )
 
     pca = load_pickle(args.artifacts_dir / "pca.pkl")
     kmeans = load_pickle(args.artifacts_dir / "kmeans.pkl")
