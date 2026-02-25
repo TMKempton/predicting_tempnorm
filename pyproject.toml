@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "predicting_tempnorm"
+version = "0.1.0"
+description = "Dataset generation and tempnorm prediction from hidden states"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.2.0",
+  "transformers>=4.38.0",
+  "numpy>=1.26.0",
+  "tqdm>=4.66.0",
+  "scikit-learn>=1.4.0"
+]
+
+[tool.setuptools]
+packages = ["predicting_tempnorm"]
